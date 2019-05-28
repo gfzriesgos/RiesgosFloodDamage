@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov  7 13:12:09 2018
@@ -10,14 +11,65 @@ Created on Wed Nov  7 13:12:09 2018
 #       path to the folder is currently os.path.join(sys.path[0], data) 
 #       and all results will be created in the same folder as the input
 
+import functools
 import os
 import sys
+import warnings
 import numpy as np
 import pandas as pd
 from osgeo import gdal, ogr, osr
 from geopandas import GeoDataFrame, overlay
 from sklearn.externals import joblib
 
+def try_with_postfix(column, postfix='_1'):
+    '''
+    Return the column name with a postfix.
+    The method is intended to be a fallback mode
+    for `find_matching_column_names`.
+
+    Parameters:
+    - `column`: name of the column.
+    - `postfix`: postfix to add to the column name
+    '''
+    return column + postfix
+
+def find_matching_column_names(from_dataframe, in_dataframe, fallback_mode):
+    '''
+    Return a list of column names that are used in the
+    from_dataframe and should be matched in the in_dataframe.
+    It is intended to be a replacement if something like this
+
+    entire_buildings = entire_buildings[buildings_overlay.columns]
+
+    fails, because of some renaming in a step before.
+
+    In the normal case the column name just match in both
+    dataframes, but if there is a difference (say a _1 and _2 postfix
+    in the from_dataframe) then this code has a fallback mode and
+    can be used to find this columns too.
+
+    There is a warning for each column that can't be found in the in_dataframe.
+
+    Parameters:
+    - `from_dataframe`: dataframe that give the column names that should be used
+    - `in_dataframe`: dataframe of which the column names should be used later
+    - `fallback_mode`: function to modify the column name to find it in the in_dataframe (for example to add a postfix)
+    '''
+    cols_from = from_dataframe.columns
+    set_cols_in = set(in_dataframe.columns)
+
+    result = []
+
+    for c in cols_from:
+        if c in set_cols_in:
+            result.append(c)
+        else:
+            c_fallback = fallback_mode(c)
+            if c_fallback in set_cols_in:
+                result.append(c_fallback)
+            else:
+                warnings.warn('column "' + c + '" could not be found.')
+    return result
 
 def andes_curve(water_depth):
     """Replication of the SDF provided by the JRC for South America"""
@@ -270,7 +322,14 @@ if __name__ == "__main__":
     entire_buildings = overlay(buildings_overlay, shapes, how="union")
     entire_buildings = entire_buildings.dissolve(by='shape_id', aggfunc='max')
     entire_buildings.crs = shapes.crs
-    entire_buildings = entire_buildings[buildings_overlay.columns]
+
+    common_cols = find_matching_column_names(
+        from_dataframe=buildings_overlay,
+        in_dataframe=entire_buildings,
+        fallback_mode=functools.partial(try_with_postfix, postfix='_1')
+    )
+
+    entire_buildings = entire_buildings[common_cols]
 
     entire_buildings.to_file(damage_name, damage_format)
     manzanas_overlay.to_file(manzanas_overlay_name, "GeoJSON")
