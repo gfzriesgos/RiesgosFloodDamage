@@ -1,2 +1,2 @@
 # RiesgosFloodDamage
-Private repository for scripts related to the RIESGOS project
+Public repository for script development related to the RIESGOS project
