@@ -60,7 +60,7 @@ def polygonizeToFile(data, mask, outname, outpath, projref,
     outDatasource = None
 
 
-def addProbaTable(df, classifier, vals, ext='clf', digits=2, threshold=0.5):
+def addProbaTable(df, classifier, vals, ext='clf', digits=2, threshold=0.3):
     """
     This overwrites the existing object, no assignment needed.
     Using the probability for the most likely class to display confidence
@@ -74,10 +74,15 @@ def addProbaTable(df, classifier, vals, ext='clf', digits=2, threshold=0.5):
     df['proba_d3_'+ext] = proba[:, 2].round(digits)
     df['proba_d4_'+ext] = proba[:, 3].round(digits)
 
-    max_proba = proba.max(axis=1)
-    conf = pd.Series(1, range(0, len(max_proba)))
-    conf[max_proba > threshold] = 2
+    max_proba = pd.DataFrame(np.sort(proba)[:, -2:],
+                             columns=['2nd', '1st'])
+    dif_proba = max_proba['1st'].values - max_proba['2nd'].values
+    conf = pd.Series(1, range(0, len(dif_proba)))
+    conf[dif_proba > threshold] = 2
+
+    df['proba_strdmg_'+ext] = 1 - df['proba_d1_'+ext]
     df['confidence_'+ext] = conf.values
+
     return(df)
 
 
@@ -109,8 +114,10 @@ def maiwald_schwarz(water_depth, damage_grade):
     b[np.where(damage_grade == 4)] = 0.76
 
     rloss = a * (np.e ** (b * water_depth))
-    # maximum is 100% damage + 15% demolition cost
-    rloss[rloss > 115] = 115
+    # maximum in the original is 115% (100% damage + 15% demolition cost)
+    rloss[rloss > 100] = 100
+    # my dmg4 is actually dmg5 and always 100 anyway
+    #rloss[np.where(damage_grade == 4)] = 100
 
     return(rloss.round(0)/100)
 
@@ -205,7 +212,7 @@ if __name__ == "__main__":
     waterdepth_array[waterdepth_array < 0.05] = 0
     waterdepth_array[waterdepth_array >= 0.05] = 1
     writeRaster(waterdepth_array, binary_outname, srs, proj)
-    print('Step 1 - completed')
+    print('Binarize - completed (1/5)')
 
 # -------------------------------- Polygonize ---------------------------------
 
@@ -222,6 +229,10 @@ if __name__ == "__main__":
         ogr.GetDriverByName("GeoJson").DeleteDataSource(velocity_polyname)
     if os.path.exists(duration_polyname):
         ogr.GetDriverByName("GeoJSON").DeleteDataSource(duration_polyname)
+    if os.path.exists(damage_manzanas_name):
+        ogr.GetDriverByName("GeoJSON").DeleteDataSource(damage_manzanas_name)
+    if os.path.exists(damage_buildings_name):
+        ogr.GetDriverByName("GeoJSON").DeleteDataSource(damage_buildings_name)
 
     projref = binary.GetProjectionRef()
 
@@ -238,7 +249,7 @@ if __name__ == "__main__":
     polygonizeToFile(duration_band, binary_band, duration_polyname, mydir,
                      projref, 'duration')
 
-    print('Step 2 - completed')
+    print('Polygonize - completed (2/5)')
 
 # ------------------------------- Intersection --------------------------------
 
@@ -284,7 +295,7 @@ if __name__ == "__main__":
     buildings_overlay.crs = shapes.crs
     manzanas_overlay.crs = manzanas.crs
 
-    print('Step 3 - completed')
+    print('Intersection - completed (3/5)')
 
 # -------------- Apply Classifiers to affected Intersections ------------------
 
@@ -296,8 +307,8 @@ if __name__ == "__main__":
     # only one decision function left in this version
     addProbaTable(buildings_overlay, decisionFunction, bvals, 'predicted')
 
-    buildings_overlay['Stage_Damage_Function'] = JRC_SDF(bwd/100)
-    buildings_overlay['ms_rloss'] = maiwald_schwarz(
+    buildings_overlay['SDF_JRC'] = JRC_SDF(bwd/100)
+    buildings_overlay['SDF2_MS'] = maiwald_schwarz(
                                     buildings_overlay['inundation'],
                                     buildings_overlay['MostLikelyClass_predicted']
                                     )
@@ -309,13 +320,13 @@ if __name__ == "__main__":
 
     addProbaTable(manzanas_overlay, decisionFunction, mvals, 'predicted')
 
-    manzanas_overlay['Stage_Damage_Function'] = JRC_SDF(mwd/100)
-    manzanas_overlay['ms_rloss'] = maiwald_schwarz(
+    manzanas_overlay['SDF_JRC'] = JRC_SDF(mwd/100)
+    manzanas_overlay['SDF2_MS'] = maiwald_schwarz(
                                    manzanas_overlay['inundation'],
                                    manzanas_overlay['MostLikelyClass_predicted']
                                    )
 
-    print('Step 4 - completed')
+    print('Classification - completed (4/5)')
 
 # ---------------------- Re-unify the building shapes -------------------------
 
@@ -334,5 +345,6 @@ if __name__ == "__main__":
     entire_buildings.to_file(damage_buildings_name, "GeoJSON")
     manzanas_overlay.to_file(damage_manzanas_name, "GeoJSON")
 
+    print('Dissolve - completed (5/5)')
     print("{} shapes affected".format(len(buildings_overlay)))
     print("DONE")
