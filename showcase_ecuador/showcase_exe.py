@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on Wed Nov  7 13:12:09 2018
@@ -10,70 +9,86 @@ Created on Wed Nov  7 13:12:09 2018
 # This script assumes all input data to be stored within the same folder. The
 #       path to the folder is currently os.path.join(sys.path[0], data) 
 #       and all results will be created in the same folder as the input
+#                water depth should be in cm and dtype UInt16
 
-import functools
 import os
 import sys
-import warnings
+import functools
 import numpy as np
 import pandas as pd
 from osgeo import gdal, ogr, osr
 from geopandas import GeoDataFrame, overlay
 from sklearn.externals import joblib
 
-def try_with_postfix(column, postfix='_1'):
-    '''
-    Return the column name with a postfix.
-    The method is intended to be a fallback mode
-    for `find_matching_column_names`.
 
-    Parameters:
-    - `column`: name of the column.
-    - `postfix`: postfix to add to the column name
-    '''
-    return column + postfix
+def writeRaster(data, outname, srs, proj, dtype=gdal.GDT_Byte):
+    """
+    Exports a 2D dataset as GTiff raster. default dtype is set to GDT_Byte -
+    this can be any gdal dtype e.g. UInt16. srs and proj should be obtained
+    from the input file via the .GeoGeoTransform() and .GetProjection()
+    """
 
-def find_matching_column_names(from_dataframe, in_dataframe, fallback_mode):
-    '''
-    Return a list of column names that are used in the
-    from_dataframe and should be matched in the in_dataframe.
-    It is intended to be a replacement if something like this
+    if data.ndim != 2:
+        print('Provided data is not 2D')
 
-    entire_buildings = entire_buildings[buildings_overlay.columns]
+    xs, ys = data.shape
+    driver = gdal.GetDriverByName("GTiff")
+    outfile = driver.Create(outname, ys, xs, 1, dtype)
+    outfile.SetGeoTransform(srs)
+    outfile.SetProjection(proj)
+    outfile.GetRasterBand(1).WriteArray(data)
+    outfile = None
 
-    fails, because of some renaming in a step before.
 
-    In the normal case the column name just match in both
-    dataframes, but if there is a difference (say a _1 and _2 postfix
-    in the from_dataframe) then this code has a fallback mode and
-    can be used to find this columns too.
+def polygonizeToFile(data, mask, outname, outpath, projref,
+                     fieldname='inundation', dtype=ogr.OFTInteger):
+    """
+    A binary mask has to be provided to restrict polygonization.
+    Otherwise this process would polygonize every raster cell.
+    projref should be obtained via .GeoProjectionRef()
+    """
 
-    There is a warning for each column that can't be found in the in_dataframe.
+    driver = ogr.GetDriverByName("GeoJSON")
+    outDatasource = driver.CreateDataSource(os.path.join(outpath, outname))
+    srs = osr.SpatialReference()
+    srs.ImportFromWkt(projref)
+    outLayer = outDatasource.CreateLayer(outname.strip('.geojson'), srs=srs)
+    newField = ogr.FieldDefn(fieldname, dtype)
+    outLayer.CreateField(newField)
+    gdal.Polygonize(data, mask, outLayer, 0, [], callback=None)
+    outDatasource.Destroy()
+    outDatasource = None
 
-    Parameters:
-    - `from_dataframe`: dataframe that give the column names that should be used
-    - `in_dataframe`: dataframe of which the column names should be used later
-    - `fallback_mode`: function to modify the column name to find it in the in_dataframe (for example to add a postfix)
-    '''
-    cols_from = from_dataframe.columns
-    set_cols_in = set(in_dataframe.columns)
 
-    result = []
+def addProbaTable(df, classifier, vals, ext='clf', digits=2, threshold=0.3):
+    """
+    This overwrites the existing object, no assignment needed.
+    Using the probability for the most likely class to display confidence
+    I consider any visualization beyond 'low' and 'high' as non-serious
+    """
 
-    for c in cols_from:
-        if c in set_cols_in:
-            result.append(c)
-        else:
-            c_fallback = fallback_mode(c)
-            if c_fallback in set_cols_in:
-                result.append(c_fallback)
-            else:
-                warnings.warn('column "' + c + '" could not be found.')
-    return result
+    df['MostLikelyClass_'+ext] = classifier.predict(vals)
+    proba = classifier.predict_proba(vals)
+    df['proba_d1_'+ext] = proba[:, 0].round(digits)
+    df['proba_d2_'+ext] = proba[:, 1].round(digits)
+    df['proba_d3_'+ext] = proba[:, 2].round(digits)
+    df['proba_d4_'+ext] = proba[:, 3].round(digits)
 
-def andes_curve(water_depth):
+    max_proba = pd.DataFrame(np.sort(proba)[:, -2:],
+                             columns=['2nd', '1st'])
+    dif_proba = max_proba['1st'].values - max_proba['2nd'].values
+    conf = pd.Series(1, range(0, len(dif_proba)))
+    conf[dif_proba > threshold] = 2
+
+    df['proba_strdmg_'+ext] = 1 - df['proba_d1_'+ext]
+    df['confidence_'+ext] = conf.values
+
+    return(df)
+
+
+def JRC_SDF(water_depth):
     """Replication of the SDF provided by the JRC for South America"""
-    
+
     dmg = (1.006049 + (0.001284178 - 1.006049) /
            (1 + (water_depth / 797962.3) ** 0.9707786) ** 681383)
     return(dmg)
@@ -99,240 +114,237 @@ def maiwald_schwarz(water_depth, damage_grade):
     b[np.where(damage_grade == 4)] = 0.76
 
     rloss = a * (np.e ** (b * water_depth))
-    # maximum is 100% damage + 15% demolition cost
-    rloss[rloss > 115] = 115
+    # maximum in the original is 115% (100% damage + 15% demolition cost)
+    rloss[rloss > 100] = 100
+    # my dmg4 is actually dmg5 and always 100 anyway
+    #rloss[np.where(damage_grade == 4)] = 100
 
     return(rloss.round(0)/100)
 
 
-def addProbaTable(df, classifier, vals, ext='clf', digits=2, threshold=0.5):
-    """
-    This overwrites the existing object, no assignment needed.
-    Using the probability for the most likely class to display confidence
-    I consider any visualization beyond 'low' and 'high' as non-serious
-    """
+def try_with_postfix(column, postfix='_1'):
+    '''
+    Return the column name with a postfix.
+    The method is intended to be a fallback mode
+    for `find_matching_column_names`.
+    Parameters:
+    - `column`: name of the column.
+    - `postfix`: postfix to add to the column name
+    '''
 
-    df['MostLikelyClass_'+ext] = classifier.predict(vals)
-    proba = classifier.predict_proba(vals)
-    df['proba_d1_'+ext] = proba[:, 0].round(digits)
-    df['proba_d2_'+ext] = proba[:, 1].round(digits)
-    df['proba_d3_'+ext] = proba[:, 2].round(digits)
-    df['proba_d4_'+ext] = proba[:, 3].round(digits)
+    return column + postfix
 
-    max_proba = proba.max(axis=1)
-    conf = pd.Series(1, range(0, len(max_proba)))
-    conf[max_proba > threshold] = 2
-    df['confidence_'+ext] = conf.values
-    return(df)
+
+def find_matching_column_names(from_dataframe, in_dataframe, fallback_mode):
+    '''
+    Return a list of column names that are used in the
+    from_dataframe and should be matched in the in_dataframe.
+    It is intended to be a replacement if something like this
+    entire_buildings = entire_buildings[buildings_overlay.columns]
+    fails, because of some renaming in a step before.
+    In the normal case the column name just match in both
+    dataframes, but if there is a difference (say a _1 and _2 postfix
+    in the from_dataframe) then this code has a fallback mode and
+    can be used to find this columns too.
+    There is a warning for each column that can't be found in the in_dataframe.
+    Parameters:
+    - `from_dataframe`: dataframe that give the column names that should be used
+    - `in_dataframe`: dataframe of which the column names should be used later
+    - `fallback_mode`: function to modify the column name to find it in the in_dataframe (for example to add a postfix)
+    '''
+
+    cols_from = from_dataframe.columns
+    set_cols_in = set(in_dataframe.columns)
+
+    result = []
+
+    for c in cols_from:
+        if c in set_cols_in:
+            result.append(c)
+        else:
+            c_fallback = fallback_mode(c)
+            if c_fallback in set_cols_in:
+                result.append(c_fallback)
+            else:
+                warnings.warn('column "' + c + '" could not be found.')
+    return result
 
 
 if __name__ == "__main__":
 
     # input
-    # mypath                 = sys.argv[1]
-    mydir                  = sys.path[0]
+    mydir                  = sys.path[0]                  # use sys.argv[1] ?
     mypath                 = os.path.join(mydir, "data")
-    hydraulic_file         = os.path.join(mypath, "vei3_wdmax.tif")
-    velocity_file          = os.path.join(mypath, "vei3_vmax.tif")
-    duration_file          = os.path.join(mypath, "vei3_duration.tif")
+    waterdepth_file        = os.path.join(mypath, "wdmax_cm.tif")
+    velocity_file          = os.path.join(mypath, "vmax_ms.tif")
+    duration_file          = os.path.join(mypath, "duration_h.tif")
     shapes_name            = os.path.join(mypath, "OBM_subset.geojson")
     manzanas_name          = os.path.join(mypath, "manzanas_scenario.geojson")
     
     # output
-    binary_outname         = os.path.join(mypath,"vei3_binary.tif")
-    hydraulic_file_cm      = os.path.join(mypath,"vei3_wdmax_cm.tif")
-    polygon_name           = os.path.join(mypath,"vei3_binary_polygon.geojson")
-    hydraulic_polygons     = os.path.join(mypath,"vei3_wdmax_polygons.geojson")
-    velocity_polygons      = os.path.join(mypath,"vei3_velocity_polygons.geojson")
-    duration_polygons      = os.path.join(mypath,"vei3_duration_polygons.geojson")
-    hazard_name            = os.path.join(mypath,"vei3_hazard.geojson")
-    manzanas_overlay_name  = os.path.join(mypath,"vei3_damage_manzanas.geojson")
-    damage_name            = os.path.join(mypath,"vei3_damage_buildings.geojson") 
-    geopandas_format       = "GeoJSON"                   
-    damage_format          = "GeoJSON"
+    binary_outname         = os.path.join(mypath,"binary.tif")
+    binary_polyname        = os.path.join(mypath,"binary_polygon.geojson")
+    waterdepth_polyname    = os.path.join(mypath,"wdmax_polygons.geojson")
+    velocity_polyname      = os.path.join(mypath,"vmax_polygons.geojson")
+    duration_polyname      = os.path.join(mypath,"duration_polygons.geojson")
+    damage_manzanas_name   = os.path.join(mypath,"damage_manzanas.geojson")
+    damage_buildings_name  = os.path.join(mypath,"damage_buildings.geojson") 
      
     # Read all files
-    hydraulic_raw = gdal.Open(hydraulic_file)
-    hydraulic_array = hydraulic_raw.ReadAsArray()
+    waterdepth = gdal.Open(waterdepth_file)
+    waterdepth_array = waterdepth.ReadAsArray()
+    waterdepth_band = waterdepth.GetRasterBand(1)
     velocity = gdal.Open(velocity_file)
     velocity_band = velocity.GetRasterBand(1)
     duration = gdal.Open(duration_file)
     duration_band = duration.GetRasterBand(1)
-
+    
+    # Will be used for writing output files to same extent
+    srs = waterdepth.GetGeoTransform()
+    proj = waterdepth.GetProjection()
+    
     # My own classifers trained on GFZ data
-    nb_cm = joblib.load(os.path.join(mypath, "classifiers", "nb_wd_continuous.pkl"))
-    nb_all = joblib.load(os.path.join(mypath, "classifiers", "nb4.pkl"))
-    rf_all = joblib.load(os.path.join(mypath, "classifiers", "rf4.pkl"))
-    mlreg = joblib.load(os.path.join(mypath, "classifiers", "mlreg.pkl"))
-
-    def writeRaster(data, outname, outpath=mypath,
-                    ref=hydraulic_raw, dtype=gdal.GDT_Byte):
-        """
-        Exports a 2D dataset as GTiff raster, using a reference band.
-        dtype is set to GDT_Byte - can be any gdal dtype e.g. UInt16
-        It would also be possible to set srs and gt without ref
-        """
-
-        if hydraulic_raw is None:
-            print('Reference File is missing')
-        if data.ndim != 2:
-            print('Provided data is not 2D')
-
-        xs, ys = data.shape
-        driver = gdal.GetDriverByName("GTiff")
-        outfile = driver.Create(os.path.join(outpath, outname), ys, xs, 1, dtype)
-        outfile.SetGeoTransform(ref.GetGeoTransform())
-        outfile.SetProjection(ref.GetProjection())
-        outfile.GetRasterBand(1).WriteArray(data)
-        outfile = None
+    decisionFunction = joblib.load(os.path.join(mypath, "classifiers",
+                                                "decisionfunction"))
 
 # --------------------------------- Binarize ----------------------------------
-    # flooded or not
-    hydraulic_array[hydraulic_array < 0.0005] = 0
-    hydraulic_array[hydraulic_array >= 0.0005] = 1
-
-    writeRaster(hydraulic_array, binary_outname)
-
-    # x100 only if in meters!!
-    hydraulic_array = hydraulic_raw.ReadAsArray()
-    hydraulic_array[hydraulic_array < 0.0005] = 0
-    hydraulic_array = hydraulic_array * 100
-
-    writeRaster(hydraulic_array, hydraulic_file_cm, dtype=gdal.GDT_UInt16)
-
-    print('Step 1 - completed')
+    # flooded or not - file is now considered to be in cm !!
+    waterdepth_array[waterdepth_array < 0.05] = 0
+    waterdepth_array[waterdepth_array >= 0.05] = 1
+    writeRaster(waterdepth_array, binary_outname, srs, proj)
+    print('Binarize - completed (1/5)')
 
 # -------------------------------- Polygonize ---------------------------------
 
     binary = gdal.Open(binary_outname)
     binary_band = binary.GetRasterBand(1)
     binary_array = binary.ReadAsArray()
-    cm = gdal.Open(hydraulic_file_cm)                    # !
-    cm_band = cm.GetRasterBand(1)
 
-    def PolygonizeToFile(data, mask, outname, fieldname='inundation',
-                         outpath=mypath, ref=binary, dtype=ogr.OFTInteger):
-        if binary is None:
-            print('Reference File is missing')
+    # Overwrite - should also be done for buildings/manzanas
+    if os.path.exists(binary_polyname):
+        ogr.GetDriverByName("GeoJSON").DeleteDataSource(binary_polyname)
+    if os.path.exists(waterdepth_polyname):
+        ogr.GetDriverByName("GeoJSON").DeleteDataSource(waterdepth_polyname)
+    if os.path.exists(velocity_polyname):
+        ogr.GetDriverByName("GeoJson").DeleteDataSource(velocity_polyname)
+    if os.path.exists(duration_polyname):
+        ogr.GetDriverByName("GeoJSON").DeleteDataSource(duration_polyname)
+    if os.path.exists(damage_manzanas_name):
+        ogr.GetDriverByName("GeoJSON").DeleteDataSource(damage_manzanas_name)
+    if os.path.exists(damage_buildings_name):
+        ogr.GetDriverByName("GeoJSON").DeleteDataSource(damage_buildings_name)
 
-        driver = ogr.GetDriverByName("GeoJSON")
-        outDatasource = driver.CreateDataSource(os.path.join(outpath, outname))
-        srs = osr.SpatialReference()
-        srs.ImportFromWkt(ref.GetProjectionRef())
-        outLayer = outDatasource.CreateLayer(outname.strip('.geojson'), srs=srs)
-        newField = ogr.FieldDefn(fieldname, dtype)
-        outLayer.CreateField(newField)
-        gdal.Polygonize(data, mask, outLayer, 0, [], callback=None)
-        outDatasource.Destroy()
-        outDatasource = None
-
-    # Overwrite
-    if os.path.exists(polygon_name):
-        ogr.GetDriverByName("GeoJSON").DeleteDataSource(polygon_name)
-    if os.path.exists(hydraulic_polygons):
-        ogr.GetDriverByName("GeoJSON").DeleteDataSource(hydraulic_polygons)
-    if os.path.exists(velocity_polygons):
-        ogr.GetDriverByName("GeoJson").DeleteDataSource(velocity_polygons)
-    if os.path.exists(duration_polygons):
-        ogr.GetDriverByName("GeoJSON").DeleteDataSource(duration_polygons)
+    projref = binary.GetProjectionRef()
 
     # Binary Polygon
-    PolygonizeToFile(binary_band, binary_band, "binary_test.geojson")
-
+    polygonizeToFile(binary_band, binary_band, binary_polyname, mydir,
+                     projref, 'affected')
     # WATER DEPTH
-    PolygonizeToFile(cm_band, binary_band, hydraulic_polygons, dtype=ogr.OFTReal)
-
+    polygonizeToFile(waterdepth_band, binary_band, waterdepth_polyname, mydir,
+                     projref, 'inundation', dtype=ogr.OFTReal)
     # VELOCITY
-    PolygonizeToFile(velocity_band, binary_band, velocity_polygons, 'velocity')
-
+    polygonizeToFile(velocity_band, binary_band, velocity_polyname, mydir,
+                     projref, 'velocity')
     # DURATION
-    PolygonizeToFile(duration_band, binary_band, duration_polygons, 'duration')
+    polygonizeToFile(duration_band, binary_band, duration_polyname, mydir,
+                     projref, 'duration')
 
-    print('Step 2 - completed')
+    print('Polygonize - completed (2/5)')
 
 # ------------------------------- Intersection --------------------------------
 
-    manzanas  = GeoDataFrame.from_file(manzanas_name)
-    shapes    = GeoDataFrame.from_file(shapes_name)
-    hydraulic = GeoDataFrame.from_file(hydraulic_polygons)
-    velocity  = GeoDataFrame.from_file(velocity_polygons)
-    duration  = GeoDataFrame.from_file(duration_polygons)
+    manzanas        = GeoDataFrame.from_file(manzanas_name)
+    shapes          = GeoDataFrame.from_file(shapes_name)
+    waterdepth_poly = GeoDataFrame.from_file(waterdepth_polyname)
+    velocity_poly   = GeoDataFrame.from_file(velocity_polyname)
+    duration_poly   = GeoDataFrame.from_file(duration_polyname)
+    
+    velocity_poly.velocity = velocity_poly.velocity / 100 
+    duration_poly.duration = duration_poly.duration.replace(0, 0.1)
+    duration_poly.duration = np.log(duration_poly.duration)
 
     shapes['shape_id'] = range(0, len(shapes))
     manzanas['manzana_id'] = range(0, len(manzanas))
 
     # Intersect all the features of interest
-    wd_v = overlay(hydraulic, velocity, how="intersection")
-    wd_v_d = overlay(wd_v, duration, how="intersection")
+    wd_v = overlay(waterdepth_poly, velocity_poly, how="intersection")
+    wd_v_d = overlay(wd_v, duration_poly, how="intersection")
     buildings_overlay = overlay(wd_v_d, shapes, how="intersection")
     manzanas_overlay = overlay(wd_v_d, manzanas, how="intersection")
 
     # aggfunc = mean or maximum / only matters for wd_v_d
-    puzzle = buildings_overlay[['shape_id', 'osm_id', 'gem_occupa', 'gem_positi',
-                                'Area', 'DegrComp', 'RadGyras', 'inundation',
-                                'velocity', 'duration', 'geometry']]
-    buildings_overlay = puzzle.dissolve(by='shape_id', aggfunc='max')
+    buildings_overlay = buildings_overlay[['shape_id', 'osm_id',
+                                           'Area', 'inundation', 'velocity',
+                                           'duration', 'geometry']].dissolve(
+                                           by='shape_id', aggfunc='max')
 
-    puzzle = manzanas_overlay[['DPA_MAN', 'manzana_id', 'NR_OBM', 'Area_mn',
-                               'Area_25', 'Are_mdn', 'Area_75', 'Area_mx',
-                               'DgC_mdn', 'RdG_mdn', 'inundation', 'velocity',
-                               'duration', 'geometry']]
-    manzanas_overlay = puzzle.dissolve(by='manzana_id', aggfunc='mean')
+    # buildings_overlay = puzzle.dissolve(by='shape_id', aggfunc='max')
+
+    manzanas_overlay = manzanas_overlay[['DPA_MAN', 'manzana_id', 'NR_OBM',
+                                         'Area_mn', 'Area_25', 'Are_mdn',
+                                         'Area_75', 'Area_mx', 'inundation',
+                                         'velocity', 'duration', 'geometry']
+                                        ].dissolve(by='manzana_id',
+                                                   aggfunc='mean')
+    # manzanas_overlay = puzzle.dissolve(by='manzana_id', aggfunc='mean')
 
     # crs has to be assigned again in case the data is to be exported
-    wd_v.crs = hydraulic.crs
-    wd_v_d.crs = hydraulic.crs
+    # maybe there should be a check of CRS and whether all are identical
+    wd_v.crs = waterdepth_poly.crs
+    wd_v_d.crs = waterdepth_poly.crs
     buildings_overlay.crs = shapes.crs
     manzanas_overlay.crs = manzanas.crs
-    # wd_v_d.to_file(hazard_name, "GeoJSON")
 
-    print('Step 3 - completed')
+    print('Intersection - completed (3/5)')
 
 # -------------- Apply Classifiers to affected Intersections ------------------
 
     # Buildings
-    wd = buildings_overlay['inundation'].values.reshape(-1, 1)
-    vals = buildings_overlay[['inundation', 'velocity', 'duration', 'Area']].copy()
+    bwd = buildings_overlay[['inundation']]
+    bvals = buildings_overlay[['inundation', 'velocity',
+                              'duration', 'Area']].copy()
 
-    addProbaTable(buildings_overlay, nb_cm, wd, 'nb_wd')
-    addProbaTable(buildings_overlay, nb_all, vals, 'nb_all')
-    addProbaTable(buildings_overlay, rf_all, vals, 'rf_all')
-    addProbaTable(buildings_overlay, mlreg, vals, 'mlreg')
-    buildings_overlay['Stage_Damage_Function'] = andes_curve(wd/100)
-    buildings_overlay['ms_rloss'] = maiwald_schwarz(buildings_overlay['inundation'],
-                                    buildings_overlay['MostLikelyClass_nb_all'])
+    # only one decision function left in this version
+    addProbaTable(buildings_overlay, decisionFunction, bvals, 'predicted')
+
+    buildings_overlay['SDF_JRC'] = JRC_SDF(bwd/100)
+    buildings_overlay['SDF2_MS'] = maiwald_schwarz(
+                                    buildings_overlay['inundation'],
+                                    buildings_overlay['MostLikelyClass_predicted']
+                                    )
 
     # Manzanas
-    wd = manzanas_overlay['inundation'].values.reshape(-1, 1)
-    vals = manzanas_overlay[['inundation', 'velocity',
+    mwd = manzanas_overlay[['inundation']]
+    mvals = manzanas_overlay[['inundation', 'velocity',
                              'duration', 'Are_mdn']].copy().fillna(value=0)
 
-    addProbaTable(manzanas_overlay, nb_cm, wd, 'nb_wd')
-    addProbaTable(manzanas_overlay, nb_all, vals, 'nb_all')
-    addProbaTable(manzanas_overlay, rf_all, vals, 'rf_all')
-    addProbaTable(manzanas_overlay, mlreg, vals, 'mlreg')
-    manzanas_overlay['Stage_Damage_Function'] = andes_curve(wd/100)
-    manzanas_overlay['ms_rloss'] = maiwald_schwarz(manzanas_overlay['inundation'],
-                                   manzanas_overlay['MostLikelyClass_nb_all'])
+    addProbaTable(manzanas_overlay, decisionFunction, mvals, 'predicted')
 
-    print('Step 4 - completed')
+    manzanas_overlay['SDF_JRC'] = JRC_SDF(mwd/100)
+    manzanas_overlay['SDF2_MS'] = maiwald_schwarz(
+                                   manzanas_overlay['inundation'],
+                                   manzanas_overlay['MostLikelyClass_predicted']
+                                   )
+
+    print('Classification - completed (4/5)')
 
 # ---------------------- Re-unify the building shapes -------------------------
 
     entire_buildings = overlay(buildings_overlay, shapes, how="union")
     entire_buildings = entire_buildings.dissolve(by='shape_id', aggfunc='max')
     entire_buildings.crs = shapes.crs
-
+	
     common_cols = find_matching_column_names(
-        from_dataframe=buildings_overlay,
-        in_dataframe=entire_buildings,
-        fallback_mode=functools.partial(try_with_postfix, postfix='_1')
+    from_dataframe=buildings_overlay,
+    in_dataframe=entire_buildings,
+    fallback_mode=functools.partial(try_with_postfix, postfix='_1')
     )
 
     entire_buildings = entire_buildings[common_cols]
 
-    entire_buildings.to_file(damage_name, damage_format)
-    manzanas_overlay.to_file(manzanas_overlay_name, "GeoJSON")
+    entire_buildings.to_file(damage_buildings_name, "GeoJSON")
+    manzanas_overlay.to_file(damage_manzanas_name, "GeoJSON")
 
+    print('Dissolve - completed (5/5)')
     print("{} shapes affected".format(len(buildings_overlay)))
     print("DONE")
