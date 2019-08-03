@@ -1,9 +1,8 @@
 # RiesgosFloodDamage
 Public repository for script development related to the RIESGOS project
 
-<div style="text-align: justify">
-Disclaimer: The current version of the damage model is not validated for the region of application, since no empirical damage data from the region is available. Decision functions are based on data from Germany and scientific literature, implemented as Naive Bayes algorithm in Python. The output is a probability score for ordinal classes of structural building damage, as opposed to typical flood loss models which output relative monetary loss. It can be considered a technical demonstration in line with the central aim of the RIESGOS project: setting up a chain of models as coupled web-serivces to study complex cascading natural hazard events.
-</div>
+
+<div style="text-align: justify"> Disclaimer: The current version of the damage model is not validated for the region of application, since no empirical damage data from the region is available. Decision functions are based on data from Germany and scientific literature, implemented as Naive Bayes algorithm in Python. The output is a probability score for ordinal classes of structural building damage, as opposed to typical flood loss models which output relative monetary loss. It can be considered a technical demonstration in line with the central aim of the RIESGOS project: setting up a chain of models as coupled web-serivces to study complex cascading natural hazard events </div>
 
 
 **Definition of damage states for floods**
