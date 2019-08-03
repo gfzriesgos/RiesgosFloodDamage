@@ -10,6 +10,8 @@ Engineers have classified the typical observed patterns of damages to buildings 
 
 <p align="center">
   <img src="damage_states_laudanetal2017.png" alt="Definition by Schwarz & Maiwald 2007, english version taken from Laudan et al. 2017" width="600" height="400">
+  <br>
+  <i>Definition by Schwarz & Maiwald 2007, english version taken from Laudan et al. 2017</i>
 </p>
 
 
@@ -20,7 +22,10 @@ The model can be considered a probabilistic, multi-variable damage classificatio
 3. *duration of inundation* may lead to severe structural damage, even total collapse, below the abovementioned intensity thresholds. This has especially been observed for rammed earth constructions, where load-bearing walls lose stability from lasting moisture
 4. *building footprint area* is anti-correlated with relative monetary loss (due to the buildings value) and to a lesser extent also with structural damages. A potential explanation for this effect might be the overall quality, material and mode of construction of larger buildings.
 
-<img src="v1d6h.png" alt="Example of model behaviour for velocity 1 m/s and duration 6 h" width="420" height="240"> <img src="v05d72h.png" alt="Example of model behaviour for velocity 0.5 m/s and duration 72 h" width="420" height="240">
+<p align="center">
+  <img src="v1d6h.png" alt="Example of model behaviour for velocity 1 m/s and duration 6 h" width="420" height="240"> <img src="v05d72h.png" alt="Example of model behaviour for velocity 0.5 m/s and duration 72 h" width="420" height="240">
+  <br>
+  <i>Example of model behaviour for (left) velocity 1 m/s and duration 6 h (right) velocity 0.5 m/s and duration 72 h</i>
 
 **Literature**  
 **Kreibich, H.**; Piroth, K.; Seifert, I.; Maiwald, H.; Kunert, U.; Schwarz, J.; Merz, B. & Thieken, A. H.: Is flow velocity a significant parameter in flood damage modelling? Natural Hazards and Earth System Science, Copernicus GmbH, 2009, 9, 1679-1692.  
