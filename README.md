@@ -7,8 +7,7 @@ Disclaimer: The current version of the damage model is not validated for the reg
 
 **Definition of damage states for floods**  
 Engineers have classified the typical observed patterns of damages to buildings in various ways. A well-established definition in accordance with the EMS-98 scheme (fig.1) can be found in Schwarz & Maiwald (2007). The Section of Hydrology at GFZ Potsdam has collected empirical damage data from various flood events, following this scheme (e.g. Laudan et al. 2017). For the model provided here, the classes 2 ('small cracks') and 3 ('big cracks') have been merged, since they could not be distinguished in statistical analysis.
-![Definition by Schwarz & Maiwald 2007, english version taken from Laudan et al. 2017](damage_states_laudanetal2017.png =100x)
-
+<img src="damage_states_laudanetal2017.png" alt="Definition by Schwarz & Maiwald 2007, english version taken from Laudan et al. 2017" width="600" height="400">
 
 **Decision function**  
 The model can be considered a probabilistic, multi-variable damage classification. A probability score is computed by a Gaussian Naive Bayes algorithm, using 4 variables: 
@@ -17,9 +16,7 @@ The model can be considered a probabilistic, multi-variable damage classificatio
 3. *duration of inundation* may lead to severe structural damage, even total collapse, below the abovementioned intensity thresholds. This has especially been observed for rammed earth constructions, where load-bearing walls lose stability from lasting moisture
 4. *building footprint area* is anti-correlated with relative monetary loss (due to the buildings value) and to a lesser extent also with structural damages. A potential explanation for this effect might be the overall quality, material and mode of construction of larger buildings.
 
-![Example of model behaviour for velocity 1 m/s and duration 6 h](v1d6h.png =100x)
-![Example of model behaviour for velocity 0.5 m/s and duration 72 h](v05d72h.png =100x)
-
+<img src="v1d6h.png" alt="Example of model behaviour for velocity 1 m/s and duration 6 h" width="420" height="240"> <img src="v05d72h.png" alt="Example of model behaviour for velocity 0.5 m/s and duration 72 h" width="420" height="240">
 
 **Literature**  
 **Kreibich, H.**; Piroth, K.; Seifert, I.; Maiwald, H.; Kunert, U.; Schwarz, J.; Merz, B. & Thieken, A. H.: Is flow velocity a significant parameter in flood damage modelling? Natural Hazards and Earth System Science, Copernicus GmbH, 2009, 9, 1679-1692.  
