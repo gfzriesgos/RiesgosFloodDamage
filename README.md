@@ -6,7 +6,7 @@ Disclaimer: The current version of the damage model is not validated for the reg
 
 
 **Definition of damage states for floods**  
-Engineers have classified the typical observed patterns of damages to buildings in various ways. A well-established definition in accordance with the EMS-98 scheme (fig.1) can be found in Schwarz & Maiwald (2007). The Section of Hydrology at GFZ Potsdam has collected empirical damage data from various flood events, following this scheme (e.g. Laudan et al. 2017). For the model provided here, the classes 2 ('small cracks') and 3 ('big cracks') have been merged, since they could not be distinguished in statistical analysis.
+Engineers have classified the typical observed patterns of damages to buildings in various ways. A well-established definition in accordance with the EMS-98 scheme can be found in Schwarz & Maiwald (2007). The Section of Hydrology at GFZ Potsdam has collected empirical damage data from various flood events, following this scheme (e.g. Laudan et al. 2017). For the model provided here, the classes 2 ('small cracks') and 3 ('big cracks') have been merged, since they could not be distinguished in statistical analysis.
 
 <p align="center">
   <img src="damage_states_laudanetal2017.png" alt="Definition by Schwarz & Maiwald 2007, english version taken from Laudan et al. 2017" width="600" height="400">
