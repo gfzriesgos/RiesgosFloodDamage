@@ -198,7 +198,14 @@ if __name__ == "__main__":
     velocity_band = velocity.GetRasterBand(1)
     duration = gdal.Open(duration_file)
     duration_band = duration.GetRasterBand(1)
-    
+
+    # The CRS of the rasters does not matter as long as it is identical for all
+    # Transformation to 4326 is done later since it is easier in geopandas
+    if not(waterdepth.GetProjection() ==
+           velocity.GetProjection() ==
+           duration.GetProjection()):
+        raise SystemExit('Provided rasters are not in the same projection')
+
     # Will be used for writing output files to same extent
     srs = waterdepth.GetGeoTransform()
     proj = waterdepth.GetProjection()
@@ -258,7 +265,14 @@ if __name__ == "__main__":
     waterdepth_poly = GeoDataFrame.from_file(waterdepth_polyname)
     velocity_poly   = GeoDataFrame.from_file(velocity_polyname)
     duration_poly   = GeoDataFrame.from_file(duration_polyname)
-    
+
+    # transform everything to 4326 regardless
+    manzanas = manzanas.to_crs({'init': 'epsg:4326'})
+    shapes = shapes.to_crs({'init': 'epsg:4326'})
+    waterdepth_poly = waterdepth_poly.to_crs({'init': 'epsg:4326'})
+    velocity_poly = velocity_poly.to_crs({'init': 'epsg:4326'})
+    duration_poly = duration_poly.to_crs({'init': 'epsg:4326'})
+
     velocity_poly.velocity = velocity_poly.velocity / 100 
     duration_poly.duration = duration_poly.duration.replace(0, 0.1)
     duration_poly.duration = np.log(duration_poly.duration)
