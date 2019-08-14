@@ -178,8 +178,8 @@ if __name__ == "__main__":
     waterdepth_file        = os.path.join(mypath, "wdmax_cm.tif")
     velocity_file          = os.path.join(mypath, "vmax_ms.tif")
     duration_file          = os.path.join(mypath, "duration_h.tif")
-    shapes_name            = os.path.join(mypath, "OBM_subset.geojson")
-    manzanas_name          = os.path.join(mypath, "manzanas_scenario.geojson")
+    shapes_name            = os.path.join(mypath, "OSM_Ecuador.geojson")
+    manzanas_name          = os.path.join(mypath, "Manzanas_Ecuador.geojson")
     
     # output
     binary_outname         = os.path.join(mypath,"binary.tif")
@@ -198,7 +198,14 @@ if __name__ == "__main__":
     velocity_band = velocity.GetRasterBand(1)
     duration = gdal.Open(duration_file)
     duration_band = duration.GetRasterBand(1)
-    
+
+    # The CRS of the rasters does not matter as long as it is identical for all
+    # Transformation to 4326 is done later since it is easier in geopandas
+    if not(waterdepth.GetProjection() ==
+           velocity.GetProjection() ==
+           duration.GetProjection()):
+        raise SystemExit('Provided rasters are not in the same projection')
+
     # Will be used for writing output files to same extent
     srs = waterdepth.GetGeoTransform()
     proj = waterdepth.GetProjection()
@@ -209,8 +216,8 @@ if __name__ == "__main__":
 
 # --------------------------------- Binarize ----------------------------------
     # flooded or not - file is now considered to be in cm !!
-    waterdepth_array[waterdepth_array < 0.05] = 0
-    waterdepth_array[waterdepth_array >= 0.05] = 1
+    waterdepth_array[waterdepth_array <= 2] = 0
+    waterdepth_array[waterdepth_array > 2] = 1
     writeRaster(waterdepth_array, binary_outname, srs, proj)
     print('Binarize - completed (1/5)')
 
@@ -258,7 +265,14 @@ if __name__ == "__main__":
     waterdepth_poly = GeoDataFrame.from_file(waterdepth_polyname)
     velocity_poly   = GeoDataFrame.from_file(velocity_polyname)
     duration_poly   = GeoDataFrame.from_file(duration_polyname)
-    
+
+    # transform everything to 4326 regardless
+    #manzanas = manzanas.to_crs({'init': 'epsg:4326'})
+    #shapes = shapes.to_crs({'init': 'epsg:4326'})
+    #waterdepth_poly = waterdepth_poly.to_crs({'init': 'epsg:4326'})
+    #velocity_poly = velocity_poly.to_crs({'init': 'epsg:4326'})
+    #duration_poly = duration_poly.to_crs({'init': 'epsg:4326'})
+
     velocity_poly.velocity = velocity_poly.velocity / 100 
     duration_poly.duration = duration_poly.duration.replace(0, 0.1)
     duration_poly.duration = np.log(duration_poly.duration)
@@ -274,15 +288,15 @@ if __name__ == "__main__":
 
     # aggfunc = mean or maximum / only matters for wd_v_d
     buildings_overlay = buildings_overlay[['shape_id', 'osm_id',
-                                           'Area', 'inundation', 'velocity',
+                                           'area', 'inundation', 'velocity',
                                            'duration', 'geometry']].dissolve(
                                            by='shape_id', aggfunc='max')
 
     # buildings_overlay = puzzle.dissolve(by='shape_id', aggfunc='max')
 
     manzanas_overlay = manzanas_overlay[['DPA_MAN', 'manzana_id', 'NR_OBM',
-                                         'Area_mn', 'Area_25', 'Are_mdn',
-                                         'Area_75', 'Area_mx', 'inundation',
+                                         'area_mn', 'area_25', 'are_mdn',
+                                         'area_75', 'area_mx', 'inundation',
                                          'velocity', 'duration', 'geometry']
                                         ].dissolve(by='manzana_id',
                                                    aggfunc='mean')
@@ -302,7 +316,7 @@ if __name__ == "__main__":
     # Buildings
     bwd = buildings_overlay[['inundation']]
     bvals = buildings_overlay[['inundation', 'velocity',
-                              'duration', 'Area']].copy()
+                              'duration', 'area']].copy()
 
     # only one decision function left in this version
     addProbaTable(buildings_overlay, decisionFunction, bvals, 'predicted')
@@ -316,7 +330,7 @@ if __name__ == "__main__":
     # Manzanas
     mwd = manzanas_overlay[['inundation']]
     mvals = manzanas_overlay[['inundation', 'velocity',
-                             'duration', 'Are_mdn']].copy().fillna(value=0)
+                             'duration', 'are_mdn']].copy().fillna(value=0)
 
     addProbaTable(manzanas_overlay, decisionFunction, mvals, 'predicted')
 
@@ -330,17 +344,18 @@ if __name__ == "__main__":
 
 # ---------------------- Re-unify the building shapes -------------------------
 
+    shapes = shapes.drop(['osm_id', 'area'], axis=1)
     entire_buildings = overlay(buildings_overlay, shapes, how="union")
     entire_buildings = entire_buildings.dissolve(by='shape_id', aggfunc='max')
     entire_buildings.crs = shapes.crs
 	
-    common_cols = find_matching_column_names(
-    from_dataframe=buildings_overlay,
-    in_dataframe=entire_buildings,
-    fallback_mode=functools.partial(try_with_postfix, postfix='_1')
-    )
+    #common_cols = find_matching_column_names(
+    #from_dataframe=buildings_overlay,
+    #in_dataframe=entire_buildings,
+    #fallback_mode=functools.partial(try_with_postfix, postfix='_1')
+    #)
 
-    entire_buildings = entire_buildings[common_cols]
+    #entire_buildings = entire_buildings[common_cols]
 
     entire_buildings.to_file(damage_buildings_name, "GeoJSON")
     manzanas_overlay.to_file(damage_manzanas_name, "GeoJSON")
