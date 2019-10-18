@@ -1,0 +1,51 @@
+{
+    "title": "FlooddamageProcess",
+    "abstract": "Process to compute the damage of a flood in ecuador.",
+    "imageId": "flooddamage:latest",
+    "workingDirectory": "/usr/share/git/riesgos_flooddamage/showcase_ecuador",
+    "commandToExecute": "python3 showcase_exe.py",
+    "exitValueHandler": "logging",
+    "stderrHandler": "pythonTraceback",
+    "input": [
+        {
+            "title": "duration-h",
+            "abstract": "Tiff file with the duration of the flood in hours",
+            "useAs": "file",
+            "type": "geotiff",
+            "path": "data/duration_h.tif",
+            "optional": true
+        },
+        {
+            "title": "vsmax-ms",
+            "abstract": "Tiff file with the maximum velocity of the flood in m/s",
+            "useAs": "file",
+            "type": "geotiff",
+            "path": "data/vmax_ms.tif",
+            "optional": true
+        },
+        {
+            "title": "wdmax-cm",
+            "abstract": "Tiff file with the maximum water depth of the flood in cm",
+            "useAs": "file",
+            "type": "geotiff",
+            "path": "data/wdmax_cm.tif",
+            "optional": true
+        }
+    ],
+    "output": [
+        {
+            "title": "damage_manzanas",
+            "abstract": "geojson with the damage of the manzanas",
+            "readFrom": "file",
+            "path": "data/damage_manzanas.geojson",
+            "type": "json"
+        },
+        {
+            "title": "damage_buildings",
+            "abstract": "geojson with the damage on the buildings",
+            "readFrom": "file",
+            "path": "data/damage_buildings.geojson",
+            "type": "json"
+        }
+    ]
+}
