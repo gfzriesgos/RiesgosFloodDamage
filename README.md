@@ -26,8 +26,29 @@ The model can be considered a probabilistic, multi-variable damage classificatio
   <img src="v1d6h.png" alt="Example of model behaviour for velocity 1 m/s and duration 6 h" width="420" height="240"> <img src="v05d72h.png" alt="Example of model behaviour for velocity 0.5 m/s and duration 72 h" width="420" height="240">
   <br>
   <i>Example of model behaviour for (left) velocity 1 m/s and duration 6 h (right) velocity 0.5 m/s and duration 72 h</i>
+</p>
 
 **Literature**  
 **Kreibich, H.**; Piroth, K.; Seifert, I.; Maiwald, H.; Kunert, U.; Schwarz, J.; Merz, B. & Thieken, A. H.: Is flow velocity a significant parameter in flood damage modelling? Natural Hazards and Earth System Science, Copernicus GmbH, 2009, 9, 1679-1692.  
 **Laudan, J.**; Rözer, V.; Sieg, T.; Vogel, K. & Thieken, A. H. Damage assessment in Braunsbach 2016: data collection and analysis for an improved understanding of damaging processes during flash floods Natural Hazards and Earth System Sciences, Copernicus GmbH, 2017, 17, 2163-2179  
 **Schwarz, J. and Maiwald, H.**: Prognose der Bauwerksschädigung unter Hochwassereinwirkung, Bautechnik, 84, 450–464, 2007 (in German).
+
+## Requirements
+
+You can run the script using a virtual environment installed with the following
+steps:
+
+```shell
+python3 -m venv venv-flooddamage
+source venv-flooddamage/bin/activate
+pip3 install wheel
+pip3 install GDAL==$(gdal-config --version)
+pip3 install -r requirements.txt
+```
+
+Otherwise it is also possible to use a docker image for running the script:
+
+```shell
+docker build -f metadata/Dockerfile . --tag flooddamage
+docker run -it flooddamage /bin/bash
+```

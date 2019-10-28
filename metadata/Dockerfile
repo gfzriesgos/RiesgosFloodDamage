@@ -2,13 +2,17 @@ FROM ubuntu:18.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install python3 git python3-scipy python3-numpy python3-gdal python3-pip libspatialindex-dev zip -y && \
-    pip3 install sklearn scikit-learn==0.19.1 geopandas==0.5.0 Rtree==0.8.3
+RUN apt-get update && apt-get install python3 git python3-scipy python3-numpy python3-gdal python3-pip libspatialindex-dev zip -y
 
 WORKDIR /usr/share/git/riesgos_flooddamage
+
+COPY requirements.txt .
+
+RUN pip3 install -r requirements.txt
 
 COPY . .
 
 RUN cd showcase_ecuador && \
     unzip data.zip && \
-    rm data.zip
+    rm data.zip && \
+    rm data/duration_h.tif data/vmax_ms.tif data/wdmax_cm.tif
