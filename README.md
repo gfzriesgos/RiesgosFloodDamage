@@ -46,10 +46,9 @@ pip3 install GDAL==$(gdal-config --version)
 pip3 install -r requirements.txt
 ```
 
-Otherwise it is also possible to us a docker image for running the script:
+Otherwise it is also possible to use a docker image for running the script:
 
 ```shell
 docker build -f metadata/Dockerfile . --tag flooddamage
 docker run -it flooddamage /bin/bash
-# python3 showcase_ecuador/showcase_exe.py
 ```
