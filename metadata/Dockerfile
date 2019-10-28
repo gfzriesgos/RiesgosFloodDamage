@@ -14,4 +14,5 @@ COPY . .
 
 RUN cd showcase_ecuador && \
     unzip data.zip && \
-    rm data.zip
+    rm data.zip && \
+    rm data/duration_h.tif data/vmax_ms.tif data/wdmax_cm.tif
