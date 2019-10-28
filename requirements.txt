@@ -1,0 +1,6 @@
+GDAL
+numpy==1.17.3
+pandas==0.25.2
+geopandas==0.6.1
+sklearn==0.0
+rtree==0.8.3

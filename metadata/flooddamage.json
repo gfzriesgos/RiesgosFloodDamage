@@ -17,7 +17,7 @@
         },
         {
             "title": "vsmax-ms",
-            "abstract": "Tiff file with the maximum velocity of the flood in m/s",
+            "abstract": "Tiff file with the velocity of the flood at peak water level in m/s",
             "useAs": "file",
             "type": "geotiff",
             "path": "data/vmax_ms.tif",

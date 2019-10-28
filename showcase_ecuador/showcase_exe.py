@@ -217,6 +217,7 @@ if __name__ == "__main__":
 # --------------------------------- Binarize ----------------------------------
     # flooded or not - file is now considered to be in cm !!
     waterdepth_array[waterdepth_array <= 2] = 0
+    waterdepth_array[waterdepth_array == 65535] = 0 # nodata value
     waterdepth_array[waterdepth_array > 2] = 1
     writeRaster(waterdepth_array, binary_outname, srs, proj)
     print('Binarize - completed (1/5)')
@@ -273,7 +274,10 @@ if __name__ == "__main__":
     #velocity_poly = velocity_poly.to_crs({'init': 'epsg:4326'})
     #duration_poly = duration_poly.to_crs({'init': 'epsg:4326'})
 
-    velocity_poly.velocity = velocity_poly.velocity / 100 
+    velocity_poly.velocity = velocity_poly.velocity.replace(65535,0.1) # nodata
+    velocity_poly.velocity = velocity_poly.velocity / 100
+    duration_poly.duration = duration_poly.duration.replace(65535,0.1) 
+    duration_poly.duration = duration_poly.duration / 6 # 10min intervals to h
     duration_poly.duration = duration_poly.duration.replace(0, 0.1)
     duration_poly.duration = np.log(duration_poly.duration)
 
