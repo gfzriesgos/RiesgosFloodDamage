@@ -360,7 +360,10 @@ if __name__ == "__main__":
     #)
 
     #entire_buildings = entire_buildings[common_cols]
-
+	
+	# reduce the size of result by excluding unaffected buildings
+    entire_buildings = entire_buildings.dropna(subset=['MostLikelyClass_predicted'])
+    
     entire_buildings.to_file(damage_buildings_name, "GeoJSON")
     manzanas_overlay.to_file(damage_manzanas_name, "GeoJSON")
 
