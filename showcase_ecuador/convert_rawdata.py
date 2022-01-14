@@ -23,7 +23,7 @@ def writeRaster(data, outname, srs, proj, dtype=gdal.GDT_UInt16):
     """
 
     if data.ndim != 2:
-        print('Provided data is not 2D')
+        print("Provided data is not 2D")
 
     xs, ys = data.shape
     driver = gdal.GetDriverByName("GTiff")
@@ -47,20 +47,20 @@ vmaxtime = v_array.argmax(0)
 
 # some reshaping for proper indexing
 flatindex = wdmaxtime.ravel()
-vflat = v_array.reshape(v_array.shape[0], v_array.shape[1]*v_array.shape[2])
+vflat = v_array.reshape(v_array.shape[0], v_array.shape[1] * v_array.shape[2])
 idx = np.arange(0, vflat.shape[1])
 v_at_wdmax = vflat[flatindex, idx].reshape(v_array.shape[1], v_array.shape[2])
 
 # duration - careful about units
 binary = wd_array > 0.01  # boolean
-d = binary.sum(0)         # True + True = 2
+d = binary.sum(0)  # True + True = 2
 
 srs = wd.GetGeoTransform()
 proj = wd.GetProjection()
 
-writeRaster(wdmax, mypath+"wdmax.tif", srs, proj, gdal.GDT_Float32)
-writeRaster(wdmaxtime, mypath+"wdmaxtime.tif", srs, proj)
-writeRaster(vmax, mypath+"vmax.tif", srs, proj, gdal.GDT_Float32)
-writeRaster(vmaxtime, mypath+"vmaxtime.tif", srs, proj)
-writeRaster(v_at_wdmax, mypath+"v_at_wdmax.tif", srs, proj, gdal.GDT_Float32)
-writeRaster(d, mypath+"duration_in_nr_of_scenes.tif", srs, proj)
+writeRaster(wdmax, mypath + "wdmax.tif", srs, proj, gdal.GDT_Float32)
+writeRaster(wdmaxtime, mypath + "wdmaxtime.tif", srs, proj)
+writeRaster(vmax, mypath + "vmax.tif", srs, proj, gdal.GDT_Float32)
+writeRaster(vmaxtime, mypath + "vmaxtime.tif", srs, proj)
+writeRaster(v_at_wdmax, mypath + "v_at_wdmax.tif", srs, proj, gdal.GDT_Float32)
+writeRaster(d, mypath + "duration_in_nr_of_scenes.tif", srs, proj)
