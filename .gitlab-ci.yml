@@ -16,6 +16,12 @@ stages:
   - test
   - build
 
+variables:
+  CPLUS_INCLUDE_PATH: "/usr/include/gdal"
+  C_INCLUDE_PATH: "/usr/include/gdal"
+  LC_ALL: "C.UTF-8"
+  LANG: "C.UTF-8"
+
 cache:
   key: "$CI_COMMIT_REF_SLUG"
   paths:
@@ -23,7 +29,7 @@ cache:
 
 .install_gdal_and_requirements: &install_gdal_and_requirements
   - DEBIAN_FRONTEND=noninteractive apt-get update && apt-get upgrade -y
-  - DEBIAN_FRONTEND=noninteractive apt-get install python3 git python3-scipy python3-numpy python3-gdal python3-pip libspatialindex-dev zip -y
+  - DEBIAN_FRONTEND=noninteractive apt-get install python3 git cython python3-scipy python3-numpy python3-gdal python3-pip libspatialindex-dev libgdal-dev zip -y
   - pip3 install --cache-dir=.pip wheel
   - export GDAL_VERSION=$(gdal-config --version)
   - sed -i -e "s@GDAL==.*@GDAL==$GDAL_VERSION@" requirements.txt
