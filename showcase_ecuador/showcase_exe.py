@@ -157,9 +157,11 @@ def find_matching_column_names(from_dataframe, in_dataframe, fallback_mode):
     can be used to find this columns too.
     There is a warning for each column that can't be found in the in_dataframe.
     Parameters:
-    - `from_dataframe`: dataframe that give the column names that should be used
+    - `from_dataframe`: dataframe that give the column names that should be
+                        used
     - `in_dataframe`: dataframe of which the column names should be used later
-    - `fallback_mode`: function to modify the column name to find it in the in_dataframe (for example to add a postfix)
+    - `fallback_mode`: function to modify the column name to find it in the
+                       in_dataframe (for example to add a postfix)
     """
 
     cols_from = from_dataframe.columns
@@ -226,7 +228,7 @@ if __name__ == "__main__":
         os.path.join(mypath, "classifiers", "decisionfunction")
     )
 
-    # --------------------------------- Binarize ----------------------------------
+    # --------------------------------- Binarize ------------------------------
     # flooded or not - file is now considered to be in cm !!
     waterdepth_array[waterdepth_array <= 2] = 0
     waterdepth_array[waterdepth_array == 65535] = 0  # nodata value
@@ -234,7 +236,7 @@ if __name__ == "__main__":
     writeRaster(waterdepth_array, binary_outname, srs, proj)
     print("Binarize - completed (1/5)")
 
-    # -------------------------------- Polygonize ---------------------------------
+    # -------------------------------- Polygonize -----------------------------
 
     binary = gdal.Open(binary_outname)
     binary_band = binary.GetRasterBand(1)
@@ -291,7 +293,7 @@ if __name__ == "__main__":
 
     print("Polygonize - completed (2/5)")
 
-    # ------------------------------- Intersection --------------------------------
+    # ------------------------------- Intersection ----------------------------
 
     manzanas = GeoDataFrame.from_file(manzanas_name)
     shapes = GeoDataFrame.from_file(shapes_name)
@@ -366,7 +368,7 @@ if __name__ == "__main__":
 
     print("Intersection - completed (3/5)")
 
-    # -------------- Apply Classifiers to affected Intersections ------------------
+    # -------------- Apply Classifiers to affected Intersections --------------
 
     # Buildings
     bwd = buildings_overlay[["inundation"]]
@@ -401,7 +403,7 @@ if __name__ == "__main__":
 
     print("Classification - completed (4/5)")
 
-    # ---------------------- Re-unify the building shapes -------------------------
+    # ---------------------- Re-unify the building shapes --------------------
 
     shapes = shapes.drop(["osm_id", "area"], axis=1)
     entire_buildings = overlay(buildings_overlay, shapes, how="union")
