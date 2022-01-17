@@ -1,0 +1,133 @@
+# Copyright © 2021 Helmholtz Centre Potsdam GFZ German Research Centre for Geosciences, Potsdam, Germany
+#
+# Licensed under the Apache License, Version 2.0 (the "License"); you may not
+# use this file except in compliance with the License. You may obtain a copy of
+# the License at
+#
+# https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+# WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+# License for the specific language governing permissions and limitations under
+# the License.
+
+stages:
+  - test
+  - build
+
+variables:
+  CPLUS_INCLUDE_PATH: "/usr/include/gdal"
+  C_INCLUDE_PATH: "/usr/include/gdal"
+  LC_ALL: "C.UTF-8"
+  LANG: "C.UTF-8"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .pip
+
+.install_gdal_and_requirements: &install_gdal_and_requirements
+  - DEBIAN_FRONTEND=noninteractive apt-get update && apt-get upgrade -y
+  - DEBIAN_FRONTEND=noninteractive apt-get install python3 git cython python3-scipy python3-numpy python3-gdal python3-pip libspatialindex-dev libgdal-dev zip -y
+  - pip3 install --cache-dir=.pip wheel
+  - export GDAL_VERSION=$(gdal-config --version)
+  - sed -i -e "s@GDAL==.*@GDAL==$GDAL_VERSION@" requirements.txt
+  - pip3 install --cache-dir=.pip -r requirements.txt
+  - pip3 uninstall -y GDAL
+  - pip3 install --cache-dir=.pip GDAL==${GDAL_VERSION} --global-option=build_ext --global-option="-I/usr/include/gdal"
+
+verify_python:
+  image: ubuntu:18.04
+  stage: test
+  tags:
+    - group
+  before_script:
+    - *install_gdal_and_requirements
+  script:
+    - python3 -m compileall .
+
+python_pycodestyle:
+  image: ubuntu:18.04
+  stage: test
+  tags:
+    - group
+  before_script:
+    - *install_gdal_and_requirements
+    - pip3 install --cache-dir=.pip pycodestyle
+  script:
+    - shopt -s globstar && pycodestyle showcase_ecuador/*.py
+
+python_pylint:
+  image: ubuntu:18.04
+  stage: test
+  # TODO: fix code to get a better pylint rating
+  allow_failure: true
+  tags:
+    - group
+  before_script:
+    - *install_gdal_and_requirements
+    - pip3 install --cache-dir=.pip pylint
+  script:
+    - shopt -s globstar && pylint --fail-under=8 showcase_ecuador/*.py
+
+python_black:
+  image: ubuntu:18.04
+  stage: test
+  tags:
+    - group
+  before_script:
+    - *install_gdal_and_requirements
+    - pip3 install --cache-dir=.pip black==21.4b2
+  script:
+    - black -l 79 --check .
+
+verify_json:
+  stage: test
+  image: registry.gitlab.com/pipeline-components/jsonlint:0.12.0
+  cache: {}
+  script:
+    - 'cd showcase_ecuador && unzip data.zip'
+    - |
+      find . -not -path './.git/*' -name '*.geojson' -type f -print0 |
+      parallel --will-cite -k -0 -n1 jsonlint -q
+
+dockerbuild_latest:
+  image: docker/compose:1.29.2
+  stage: build
+  cache: {}
+  tags:
+    - group
+  script:
+    - docker build -t flooddamage:latest -f metadata/Dockerfile .
+
+    # push latest image to Docker Hub
+    - docker tag flooddamage:latest gfzriesgos/flooddamage:latest
+    - docker login -u ${DOCKERHUB_USER} -p ${DOCKERHUB_PASSWORD}
+    - docker push gfzriesgos/flooddamage:latest
+
+    # push latest image to GitLab Container Registry
+    - docker tag flooddamage:latest git.gfz-potsdam.de:5000/id2/riesgos/flooddamage:latest
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker push git.gfz-potsdam.de:5000/id2/riesgos/flooddamage:latest
+
+dockerbuild_tagged:
+  image: docker/compose:1.29.2
+  stage: build
+  cache: {}
+  tags:
+    - group
+  rules:
+    - if: $CI_COMMIT_TAG
+  script:
+    - docker build -t flooddamage:$CI_COMMIT_TAG -f metadata/Dockerfile .
+
+    # push image to Docker Hub
+    - docker tag flooddamage:$CI_COMMIT_TAG gfzriesgos/flooddamage:$CI_COMMIT_TAG
+    - docker login -u ${DOCKERHUB_USER} -p ${DOCKERHUB_PASSWORD}
+    - docker push gfzriesgos/flooddamage:$CI_COMMIT_TAG
+
+    # push image to GitLab Container Registry
+    - docker tag flooddamage:$CI_COMMIT_TAG git.gfz-potsdam.de:5000/id2/riesgos/flooddamage:$CI_COMMIT_TAG
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker push git.gfz-potsdam.de:5000/id2/riesgos/flooddamage:$CI_COMMIT_TAG
