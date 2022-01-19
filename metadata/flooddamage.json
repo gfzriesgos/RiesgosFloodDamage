@@ -1,7 +1,7 @@
 {
     "title": "FlooddamageProcess",
     "abstract": "Process to compute the damage of a flood in ecuador.",
-    "imageId": "flooddamage:latest",
+    "imageId": "gfzriesgos/flooddamage:latest",
     "workingDirectory": "/usr/share/git/riesgos_flooddamage/showcase_ecuador",
     "commandToExecute": "python3 showcase_exe.py",
     "exitValueHandler": "logging",
